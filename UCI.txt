@@ -1,0 +1,394 @@
+"""
+UCI Hydraulic System Dataset preprocessing
+
+Pipeline:
+Raw UCI hydraulic dataset
+        |
+        v
+Extract PS2 pressure signal
+        |
+        v
+Calculate PS2 skewness and kurtosis
+        |
+        v
+Valve condition labeling
+        |
+        v
+Stratified sampling (401 samples)
+        |
+        v
+Stratified train/test split (7:3)
+
+Label mapping:
+100 -> 0 Healthy (H)
+90  -> 1 Mild degradation (G)
+80  -> 2 Moderate degradation (M)
+73  -> 3 Failure (D)
+
+Output:
+hydraulic_PS2_401_features.csv
+hydraulic_train.csv
+hydraulic_test.csv
+"""
+
+
+import numpy as np
+import pandas as pd
+
+from scipy.stats import skew, kurtosis
+
+from sklearn.model_selection import train_test_split
+
+
+
+RANDOM_STATE = 2026
+
+
+
+# ======================================================
+# 1. PS2 feature extraction
+# ======================================================
+
+def extract_ps2_features(signal):
+
+    """
+    Calculate PS2 skewness and ordinary kurtosis.
+
+    signal:
+        one operation cycle of PS2 pressure signal
+    """
+
+    ps2_skew = skew(
+        signal,
+        bias=False
+    )
+
+
+    # Ordinary kurtosis
+    ps2_kurt = kurtosis(
+        signal,
+        fisher=False,
+        bias=False
+    )
+
+
+    return ps2_skew, ps2_kurt
+
+
+
+# ======================================================
+# 2. Generate all hydraulic samples
+# ======================================================
+
+def generate_all_samples(data_dir):
+
+
+    profile = np.loadtxt(
+        data_dir + "/profile.txt",
+        delimiter="\t"
+    )
+
+
+    ps2 = np.loadtxt(
+        data_dir + "/PS2.txt",
+        delimiter="\t"
+    )
+
+
+    # profile column 2:
+    # Valve condition
+
+    valve_condition = profile[:,1]
+
+
+    label_map = {
+
+        100:0,   # Healthy
+        90:1,    # Mild degradation
+        80:2,    # Moderate degradation
+        73:3     # Failure
+    }
+
+
+
+    samples = []
+
+
+
+    for cycle in range(len(valve_condition)):
+
+
+        condition = valve_condition[cycle]
+
+
+
+        if condition not in label_map:
+
+            continue
+
+
+
+        ps, pk = extract_ps2_features(
+            ps2[cycle]
+        )
+
+
+
+        samples.append({
+
+            "cycle": cycle + 1,
+
+            "valve_condition": int(condition),
+
+            "label": label_map[condition],
+
+            "PS2_skew": ps,
+
+            "PS2_kurt": pk
+
+        })
+
+
+
+    return pd.DataFrame(samples)
+
+
+
+
+
+# ======================================================
+# 3. Stratified sampling to 401 samples
+# ======================================================
+
+def stratified_sampling(df):
+
+
+    """
+    Select samples according to the experimental
+    class distribution:
+
+    H : 206
+    G : 65
+    M : 65
+    D : 65
+
+    Total = 401
+    """
+
+
+
+    target_number = {
+
+        0:206,
+
+        1:65,
+
+        2:65,
+
+        3:65
+
+    }
+
+
+
+    selected = []
+
+
+
+    for label, number in target_number.items():
+
+
+        class_samples = df[
+            df["label"] == label
+        ]
+
+
+
+        selected.append(
+
+            class_samples.sample(
+
+                n=number,
+
+                random_state=RANDOM_STATE
+
+            )
+
+        )
+
+
+
+    result = pd.concat(
+        selected
+    )
+
+
+
+    result = result.sample(
+
+        frac=1,
+
+        random_state=RANDOM_STATE
+
+    ).reset_index(drop=True)
+
+
+
+    return result
+
+
+
+
+
+# ======================================================
+# 4. Train/Test split
+# ======================================================
+
+def split_dataset(df):
+
+
+    train, test = train_test_split(
+
+        df,
+
+        test_size=0.3,
+
+        random_state=RANDOM_STATE,
+
+        stratify=df["label"]
+
+    )
+
+
+    return train, test
+
+
+
+
+
+# ======================================================
+# 5. Main preprocessing
+# ======================================================
+
+def preprocess(data_dir):
+
+
+    print("==============================")
+
+    print("Extracting PS2 features")
+
+    print("==============================")
+
+
+    all_samples = generate_all_samples(
+        data_dir
+    )
+
+
+    print(
+        "Original samples:",
+        len(all_samples)
+    )
+
+
+
+    print(
+        all_samples["label"]
+        .value_counts()
+        .sort_index()
+    )
+
+
+
+
+    print("\nSampling 401 samples")
+
+
+
+    dataset401 = stratified_sampling(
+        all_samples
+    )
+
+
+
+    print(
+        "Final samples:",
+        len(dataset401)
+    )
+
+
+
+    print(
+        dataset401["label"]
+        .value_counts()
+        .sort_index()
+    )
+
+
+
+    dataset401.to_csv(
+
+        "hydraulic_PS2_401_features.csv",
+
+        index=False
+
+    )
+
+
+
+    print("\nPerform 7:3 stratified split")
+
+
+
+    train, test = split_dataset(
+
+        dataset401
+
+    )
+
+
+
+    train.to_csv(
+
+        "hydraulic_train.csv",
+
+        index=False
+
+    )
+
+
+    test.to_csv(
+
+        "hydraulic_test.csv",
+
+        index=False
+
+    )
+
+
+
+    print("\nTraining samples:",len(train))
+
+    print("Testing samples:",len(test))
+
+
+
+    print("\nFinished!")
+
+
+
+
+
+if __name__ == "__main__":
+
+
+    # Modify this path
+    hydraulic_path = "./UCI_hydraulic"
+
+
+
+    preprocess(
+
+        hydraulic_path
+
+    )

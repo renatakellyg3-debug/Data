@@ -1,0 +1,221 @@
+"""
+NASA Li-ion battery preprocessing
+
+Feature:
+    PC-time-CC
+    PC-time-CV
+
+Target:
+    Capacity
+
+Dataset:
+    NASA PCoE Battery Dataset
+
+Battery:
+    B0006 (example)
+
+Output:
+    NASA_B0006_PCtime_features.csv
+"""
+
+
+import numpy as np
+import pandas as pd
+
+from scipy.io import loadmat
+
+
+
+# ================================
+# Parameters
+# ================================
+
+MAT_FILE = "B0006.mat"
+
+OUTPUT = "NASA_B0006_PCtime_features.csv"
+
+
+
+CC_CURRENT = 1.5
+
+CV_VOLTAGE = 4.2
+
+CV_CURRENT_END = 0.02
+
+
+
+
+# ================================
+# Load NASA mat
+# ================================
+
+
+def load_battery(filename):
+
+    data = loadmat(filename)
+
+    return data
+
+
+
+
+# ================================
+# Extract charge features
+# ================================
+
+
+def extract_cycle_features(cycle):
+
+
+    current = cycle["data"].current.flatten()
+
+    voltage = cycle["data"].Voltage_measured.flatten()
+
+    capacity = cycle["data"].Capacity
+
+
+
+    # ----------------------------
+    # CC charging time
+    # ----------------------------
+
+    cc_index = np.where(
+        current >= CC_CURRENT*0.9
+    )[0]
+
+
+    if len(cc_index)>0:
+
+        cc_time = (
+            len(cc_index)
+        )
+
+    else:
+
+        cc_time=np.nan
+
+
+
+    # ----------------------------
+    # CV charging time
+    # ----------------------------
+
+
+    cv_index=np.where(
+
+        voltage>=CV_VOLTAGE*0.99
+
+    )[0]
+
+
+    if len(cv_index)>0:
+
+        cv_time=len(cv_index)
+
+    else:
+
+        cv_time=np.nan
+
+
+
+    return (
+
+        cc_time,
+
+        cv_time,
+
+        capacity
+
+    )
+
+
+
+
+
+# ================================
+# Main
+# ================================
+
+
+def preprocess():
+
+
+    mat = load_battery(
+        MAT_FILE
+    )
+
+
+    battery = mat["B0006"][0,0]
+
+
+    cycles=battery["cycle"]
+
+
+
+    results=[]
+
+
+
+    for i in range(
+        cycles.shape[1]
+    ):
+
+
+        cycle=cycles[0,i]
+
+
+        cycle_type=str(
+            cycle["type"][0]
+        )
+
+
+        if cycle_type!="charge":
+
+            continue
+
+
+
+        cc,cv,cap=extract_cycle_features(
+            cycle
+        )
+
+
+
+        results.append({
+
+            "cycle":i+1,
+
+            "PC_time_CC":cc,
+
+            "PC_time_CV":cv,
+
+            "Capacity":cap
+
+        })
+
+
+
+    df=pd.DataFrame(results)
+
+
+    df=df.dropna()
+
+
+    df.to_csv(
+        OUTPUT,
+        index=False
+    )
+
+
+    print(df.head())
+
+    print(
+        "Samples:",
+        len(df)
+    )
+
+
+
+if __name__=="__main__":
+
+    preprocess()
