@@ -1,8 +1,7 @@
 %% preprocess_NASA_B0006.m
 % Preprocess NASA PCoE B0006 lithium-ion battery dataset.
 %
-% Output:
-%   B0006_processed.csv
+
 % Columns:
 %   SampleID          - paired charge-discharge sample index
 %   ChargeCycleIndex  - original charge-cycle index in B0006.cycle
@@ -52,16 +51,7 @@ end
 
 S = load(MAT_FILE);
 
-% NASA files normally contain a top-level structure named B0006.
-if isfield(S, 'B0006')
-    batt = S.B0006;
-else
-    fn = fieldnames(S);
-    if numel(fn) == 1 && isstruct(S.(fn{1}))
-        batt = S.(fn{1});
-        warning('Top-level variable is "%s" rather than "B0006".', fn{1});
-    else
-        error('Cannot identify the battery structure in %s.', MAT_FILE);
+
     end
 end
 
@@ -72,9 +62,7 @@ end
 cycles = batt.cycle;
 nCycles = numel(cycles);
 
-%% ==================== Traverse and pair cycles =========================
-rows = [];
-sampleID = 0;
+
 
 i = 1;
 while i <= nCycles
@@ -85,19 +73,7 @@ while i <= nCycles
     end
 
     chargeIdx = i;
-
-    % Find the next discharge cycle after this charge cycle.
-    dischargeIdx = [];
-    j = i + 1;
-    while j <= nCycles
-        if isfield(cycles(j), 'type')
-            thisType = strtrim(cycles(j).type);
-
-            if strcmpi(thisType, 'discharge')
-                dischargeIdx = j;
-                break;
-            elseif strcmpi(thisType, 'charge')
-                % A new charge begins before a discharge is found.
+found.
                 % Do not cross-pair across two charge cycles.
                 break;
             end
@@ -149,16 +125,7 @@ T = array2table(rows, 'VariableNames', { ...
     'Capacity_HI'});
 
 writetable(T, OUT_CSV);
-
-fprintf('\n============================================================\n');
-fprintf('NASA B0006 preprocessing completed.\n');
-fprintf('Valid paired samples : %d\n', height(T));
-fprintf('Output file          : %s\n', OUT_CSV);
-fprintf('PC-time-CC range     : %.3f -- %.3f s\n', ...
-    min(T.PC_time_CC), max(T.PC_time_CC));
-fprintf('PC-time-CV range     : %.3f -- %.3f s\n', ...
-    min(T.PC_time_CV), max(T.PC_time_CV));
-fprintf('Capacity range       : %.6f -- %.6f Ah\n', ...
+.
     min(T.Capacity_HI), max(T.Capacity_HI));
 
 if ~isempty(EXPECTED_SAMPLES) && height(T) ~= EXPECTED_SAMPLES
@@ -175,9 +142,7 @@ end
 %
 % X = T{:, {'PC_time_CC','PC_time_CV'}};
 % y = T.Capacity_HI;
-%
-% Example chronological split matching 116/50 when N=166:
-% nTrain = 116;
+
 % Xtrain = X(1:nTrain,:);
 % Xtest  = X(nTrain+1:end,:);
 % ytrain = y(1:nTrain);
